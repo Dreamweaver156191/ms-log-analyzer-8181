@@ -1,0 +1,17 @@
+server:
+  port: 8181
+
+spring:
+  application:
+    name: logfile-analyzer
+
+
+project:
+  name: Log File Analyzer
+  version: 0.0.1-SNAPSHOT
+  description: Parses log files, analyzes user activity, and exposes results via REST or CLI
+
+logging:
+  level:
+    root: INFO
+    za.co.frei.logfile.analyzer: DEBUG
