@@ -9,11 +9,30 @@ import za.co.frei.logfile.analyzer.model.TopUploader;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class LogParserService {
+
+    private final List<LogEntry> storedEntries = new ArrayList<>();
+
+    public List<LogEntry> getStoredEntries() {
+        return Collections.unmodifiableList(storedEntries);
+    }
+
+    public void clearStoredEntries() {
+        storedEntries.clear();
+    }
+
+    public int getStoredEntryCount() {
+        return storedEntries.size();
+    }
+
+    protected void addStoredEntry(LogEntry entry) {
+        storedEntries.add(entry);
+    }
 
     public List<LogEntry> parseLog(InputStream inputStream) {
         // TODO: Implement logic to parse log file into List<LogEntry>
