@@ -4,7 +4,8 @@ server:
 spring:
   application:
     name: logfile-analyzer
-
+  profiles:
+    active: dev
 
 project:
   name: Log File Analyzer
