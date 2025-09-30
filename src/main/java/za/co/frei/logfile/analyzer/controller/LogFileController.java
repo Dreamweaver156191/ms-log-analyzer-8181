@@ -31,7 +31,9 @@ public class LogFileController {
     public ResponseEntity<String> hello() {
         logger.debug("Handling GET request for /hello endpoint");
         // TODO: Implement health check logic
-        return ResponseEntity.ok("Log File Analyzer Controller is active!");
+        return ResponseEntity.ok()
+                .header("Cache-Control", "no-cache")
+                .body("Log File Analyzer Controller is active!");
     }
 
     @PostMapping("/upload")

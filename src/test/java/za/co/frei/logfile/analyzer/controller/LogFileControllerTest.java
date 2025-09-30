@@ -21,6 +21,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -38,8 +39,10 @@ public class LogFileControllerTest {
     public void shouldReturnHelloMessage() throws Exception {
         // TODO: Verify hello endpoint response
         mockMvc.perform(get("/api/v1/logs/hello"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-cache"));
     }
+
 
     @Test
     public void shouldReturnBadRequestForEmptyFile() throws Exception {
