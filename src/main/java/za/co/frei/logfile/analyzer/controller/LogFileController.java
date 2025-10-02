@@ -115,14 +115,25 @@ public class LogFileController {
     }
 
     @GetMapping("/users/login-counts")
-    public ResponseEntity<Map<String, LoginStats>> getLoginCounts() {
-        logger.debug("GET /users/login-counts");
+    public ResponseEntity<Map<String, LoginStats>> getLoginCounts(
+            @RequestParam(required = false) String user) {
+        logger.debug("GET /users/login-counts with user filter: {}", user);
 
         Map<String, LoginStats> loginCounts = parserService.getLoginCounts();
 
         if (loginCounts.isEmpty()) {
             logger.info("No login data available");
             return ResponseEntity.noContent().build();
+        }
+
+        // Filter by user if specified
+        if (user != null && !user.isBlank()) {
+            LoginStats stats = loginCounts.get(user);
+            if (stats == null) {
+                logger.info("No login data for user: {}", user);
+                return ResponseEntity.noContent().build();
+            }
+            return ResponseEntity.ok(Map.of(user, stats));
         }
 
         logger.debug("Returning login counts for {} users", loginCounts.size());
