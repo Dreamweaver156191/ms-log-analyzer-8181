@@ -279,9 +279,34 @@ public class LogParserService {
         return result;
     }
 
-    public List<TopUploader> getTopUploaders(List<LogEntry> entries, int limit) {
-        // TODO: Implement logic to get top uploaders based on FILE_UPLOAD events
-        return null;
+    public List<TopUploader> getTopUploaders(int limit) {
+        if (limit <= 0) {
+            throw new IllegalArgumentException("Limit must be positive");
+        }
+
+        logger.debug("Getting top {} uploaders from aggregated data", limit);
+
+        if (uploadCountsByUser.isEmpty()) {
+            logger.debug("No upload data available");
+            return List.of();
+        }
+
+        List<TopUploader> result = uploadCountsByUser.entrySet().stream()
+                .map(e -> new TopUploader(e.getKey(), e.getValue().get()))
+                .sorted(Comparator.comparingInt(TopUploader::uploads).reversed())
+                .limit(limit)
+                .toList();
+
+        logger.info("Returning top {} uploaders, found {} users with uploads",
+                limit, uploadCountsByUser.size());
+        return result;
+    }
+
+    /**
+     * Gets total count of unique users who have uploaded files.
+     */
+    public int getTotalUsersWithUploads() {
+        return uploadCountsByUser.size();
     }
 
     public List<SuspiciousWindow> getSuspiciousActivity(List<LogEntry> entries) {

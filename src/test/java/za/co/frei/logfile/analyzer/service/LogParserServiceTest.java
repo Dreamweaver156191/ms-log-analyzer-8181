@@ -94,17 +94,21 @@ public class LogParserServiceTest {
 
 
     @Test
-    public void shouldGetTopUploaders() {
-        Instant now = Instant.now();
-        List<LogEntry> entries = List.of(
-                new LogEntry(now, "user1", EventType.FILE_UPLOAD, "192.168.1.1", "file1"),
-                new LogEntry(now, "user1", EventType.FILE_UPLOAD, "192.168.1.1", "file2"),
-                new LogEntry(now, "user2", EventType.FILE_UPLOAD, "192.168.1.2", "file3"),
-                new LogEntry(now, "user3", EventType.LOGIN_SUCCESS, "192.168.1.3", null)
-        );
+    public void shouldGetTopUploadersFromAggregatedData() throws IOException {
+        // Parse data first to populate the aggregated map
+        String logContent =
+                "2025-09-15T08:00:00Z | user1 | FILE_UPLOAD | FILE=file1.pdf\n" +
+                        "2025-09-15T08:01:00Z | user1 | FILE_UPLOAD | FILE=file2.pdf\n" +
+                        "2025-09-15T08:02:00Z | user2 | FILE_UPLOAD | FILE=file3.pdf\n" +
+                        "2025-09-15T08:03:00Z | user3 | LOGIN_SUCCESS | IP=192.168.1.3";
 
-        List<TopUploader> result = parserService.getTopUploaders(entries, 2);
+        InputStream inputStream = new ByteArrayInputStream(logContent.getBytes());
+        parserService.parseLog(inputStream);
 
+        // Now call the new method with just limit parameter
+        List<TopUploader> result = parserService.getTopUploaders(2);
+
+        // Verify results
         assertEquals(2, result.size());
         assertEquals("user1", result.get(0).user());
         assertEquals(2, result.get(0).uploads());

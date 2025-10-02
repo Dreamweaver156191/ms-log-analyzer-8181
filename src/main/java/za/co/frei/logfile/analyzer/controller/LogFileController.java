@@ -145,8 +145,32 @@ public class LogFileController {
     @GetMapping("/users/top-uploaders")
     public ResponseEntity<List<Map<String, Object>>> getTopUploaders(@RequestParam(defaultValue = "3") int limit) {
         logger.debug("Handling GET request for /users/top-uploaders endpoint with limit {}", limit);
-        // TODO: Implement logic to get top uploaders based on FILE_UPLOAD events
-        return ResponseEntity.ok(null);
+
+        if (limit <= 0) {
+            logger.warn("Invalid limit provided: {}", limit);
+            throw new IllegalArgumentException("Limit must be positive");
+        }
+
+        // Call the new method signature with just limit parameter
+        List<TopUploader> topUploaders = parserService.getTopUploaders(limit);
+
+        // Return 204 No Content if no upload data exists
+        if (topUploaders.isEmpty()) {
+            logger.info("No upload data available, returning 204 No Content");
+            return ResponseEntity.noContent().build();
+        }
+
+        List<Map<String, Object>> response = topUploaders.stream()
+                .map(u -> {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("user", u.user());
+                    map.put("uploads", u.uploads());
+                    return map;
+                })
+                .toList();
+
+        logger.info("Returning top {} uploaders, found {} users", limit, response.size());
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/security/suspicious")
