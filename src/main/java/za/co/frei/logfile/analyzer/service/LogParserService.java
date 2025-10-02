@@ -3,23 +3,17 @@ package za.co.frei.logfile.analyzer.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import za.co.frei.logfile.analyzer.model.EventType;
-import za.co.frei.logfile.analyzer.model.LogEntry;
-import za.co.frei.logfile.analyzer.model.LoginStats;
-import za.co.frei.logfile.analyzer.model.SuspiciousWindow;
-import za.co.frei.logfile.analyzer.model.TopUploader;
+import za.co.frei.logfile.analyzer.model.*;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class LogParserService {
@@ -29,17 +23,51 @@ public class LogParserService {
     // Thread-safe: ConcurrentLinkedQueue allows safe concurrent access without external synchronization
     private final ConcurrentLinkedQueue<LogEntry> storedEntries = new ConcurrentLinkedQueue<>();
 
+    // Aggregated data - maintained during parsing for O(1) query performance
+    // Maps user -> login statistics (success/failure counts)
+    private final ConcurrentHashMap<String, LoginStatsHolder> loginStatsByUser = new ConcurrentHashMap<>();
+
+    // Maps user -> number of file uploads
+    private final ConcurrentHashMap<String, AtomicInteger> uploadCountsByUser = new ConcurrentHashMap<>();
+
+    // Maps IP -> timestamps of login failures (for suspicious activity detection)
+    private final ConcurrentHashMap<String, ConcurrentLinkedQueue<Instant>> loginFailuresByIp = new ConcurrentHashMap<>();
+
     // Thread-safe: AtomicInteger provides atomic operations for thread-safe counter
     private final AtomicInteger errors = new AtomicInteger(0);
 
     public List<LogEntry> getStoredEntries() {
-        // Wrap in unmodifiable list to prevent external modification
-        return Collections.unmodifiableList(new ArrayList<>(storedEntries));
+        // Creates immutable snapshot - List.copyOf() is null-safe and more efficient
+        return List.copyOf(storedEntries);
+    }
+
+    /**
+     * Returns login statistics by user. Thread-safe snapshot.
+     */
+    protected Map<String, LoginStatsHolder> getLoginStatsByUser() {
+        return new HashMap<>(loginStatsByUser);
+    }
+
+    /**
+     * Returns upload counts by user. Thread-safe snapshot.
+     */
+    protected Map<String, AtomicInteger> getUploadCountsByUser() {
+        return new HashMap<>(uploadCountsByUser);
+    }
+
+    /**
+     * Returns login failures grouped by IP. Thread-safe snapshot.
+     */
+    protected Map<String, ConcurrentLinkedQueue<Instant>> getLoginFailuresByIp() {
+        return new HashMap<>(loginFailuresByIp);
     }
 
     public synchronized void clearStoredEntries() {
         storedEntries.clear();
         errors.set(0);
+        loginStatsByUser.clear();
+        uploadCountsByUser.clear();
+        loginFailuresByIp.clear();
     }
 
     public int getStoredEntryCount() {
@@ -61,11 +89,22 @@ public class LogParserService {
 
     public List<LogEntry> parseLog(InputStream inputStream) {
         List<LogEntry> entries = new ArrayList<>();
+        Map<EventType, Integer> eventCounts = new HashMap<>();
+        logger.info("Starting log parsing from InputStream");
+
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
             String line;
             int lineNumber = 0;
+
             while ((line = reader.readLine()) != null) {
                 lineNumber++;
+
+                // Progress logging for large files
+                if (lineNumber % 500 == 0) {
+                    logger.info("Parsed {} lines so far, {} entries added, {} errors encountered",
+                            lineNumber, entries.size(), errors.get());
+                }
+
                 if (line.trim().isEmpty()) {
                     logger.debug("Skipping empty line at line {}", lineNumber);
                     continue;
@@ -75,7 +114,6 @@ public class LogParserService {
                 if (parts.length < 3) {
                     logger.warn("Invalid log line at {}: {}", lineNumber, line);
                     errors.incrementAndGet();
-
                     continue;
                 }
 
@@ -92,7 +130,6 @@ public class LogParserService {
                         } else {
                             logger.warn("Missing or invalid IP at line {}: {}", lineNumber, line);
                             errors.incrementAndGet();
-
                             continue;
                         }
                     } else if (event == EventType.FILE_UPLOAD || event == EventType.FILE_DOWNLOAD) {
@@ -109,42 +146,42 @@ public class LogParserService {
                             } else {
                                 logger.warn("Invalid FILE at line {}: {}", lineNumber, line);
                                 errors.incrementAndGet();
-
                                 continue;
                             }
                         } else {
                             logger.warn("Missing FILE field at line {}: {}", lineNumber, line);
                             errors.incrementAndGet();
-
                             continue;
                         }
                     } else if (event == EventType.LOGOUT) {
                         if (parts.length > 3 && !parts[3].isEmpty()) {
                             logger.warn("Unexpected extra field for LOGOUT at line {}: {}", lineNumber, line);
                             errors.incrementAndGet();
-
                             continue;
                         }
                         ip = "0.0.0.0"; // default for logout
                     } else {
                         logger.warn("Unknown event type at line {}: {}", lineNumber, line);
                         errors.incrementAndGet();
-
                         continue;
                     }
 
                     LogEntry entry = new LogEntry(timestamp, user, event, ip, file);
                     entries.add(entry);
                     addStoredEntry(entry);
+                    updateAggregates(entry);
+                    eventCounts.merge(event, 1, Integer::sum);
                     logger.debug("Parsed entry at line {}: {}", lineNumber, entry);
 
                 } catch (IllegalArgumentException e) {
                     logger.warn("Failed to parse line {}: {}, error: {}", lineNumber, line, e.getMessage());
                     errors.incrementAndGet();
-
                 }
             }
-            logger.info("Parsed {} entries, total stored: {}, errors: {}", entries.size(), storedEntries.size(), errors.get());
+
+            logger.info("Event breakdown: {}", eventCounts);
+            logger.info("Parsed {} entries, total stored: {}, errors: {}",
+                    entries.size(), storedEntries.size(), errors.get());
         } catch (IOException e) {
             logger.error("Error reading log file: {}", e.getMessage(), e);
             throw new RuntimeException("Error parsing log file", e);
@@ -152,6 +189,42 @@ public class LogParserService {
         return entries;
     }
 
+    /**
+     * Updates aggregated data structures based on the log entry.
+     * This allows O(1) query performance for endpoint calls.
+     */
+    private void updateAggregates(LogEntry entry) {
+        switch (entry.event()) {
+            case LOGIN_SUCCESS:
+                loginStatsByUser
+                        .computeIfAbsent(entry.user(), k -> new LoginStatsHolder())
+                        .incrementSuccess();
+                break;
+
+            case LOGIN_FAILURE:
+                // Track by user
+                loginStatsByUser
+                        .computeIfAbsent(entry.user(), k -> new LoginStatsHolder())
+                        .incrementFailure();
+
+                // Track by IP for suspicious activity detection
+                loginFailuresByIp
+                        .computeIfAbsent(entry.ip(), k -> new ConcurrentLinkedQueue<>())
+                        .add(entry.timestamp());
+                break;
+
+            case FILE_UPLOAD:
+                uploadCountsByUser
+                        .computeIfAbsent(entry.user(), k -> new AtomicInteger(0))
+                        .incrementAndGet();
+                break;
+
+            case FILE_DOWNLOAD:
+            case LOGOUT:
+                // No aggregation needed for these events currently
+                break;
+        }
+    }
 
     public Map<String, LoginStats> getLoginCounts(List<LogEntry> entries) {
         // TODO: Implement logic to count LOGIN_SUCCESS and LOGIN_FAILURE per user

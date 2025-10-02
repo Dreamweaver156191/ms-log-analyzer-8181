@@ -13,11 +13,11 @@ public class LogEntryTest {
         Instant now = Instant.now();
         LogEntry entry = new LogEntry(now, "user1", EventType.LOGIN_SUCCESS, "192.168.1.1", null);
 
-        assertEquals(now, entry.getTimestamp());
-        assertEquals("user1", entry.getUser());
-        assertEquals(EventType.LOGIN_SUCCESS, entry.getEvent());
-        assertEquals("192.168.1.1", entry.getIp());
-        assertNull(entry.getFile());
+        assertEquals(now, entry.timestamp());
+        assertEquals("user1", entry.user());
+        assertEquals(EventType.LOGIN_SUCCESS, entry.event());
+        assertEquals("192.168.1.1", entry.ip());
+        assertNull(entry.file());
     }
 
     @Test
@@ -25,7 +25,7 @@ public class LogEntryTest {
         Instant now = Instant.now();
         LogEntry entry = new LogEntry(now, "user1", EventType.FILE_UPLOAD, "192.168.1.1", "test.dat");
 
-        assertEquals("test.dat", entry.getFile());
+        assertEquals("test.dat", entry.file());
     }
 
     @Test
@@ -33,19 +33,19 @@ public class LogEntryTest {
         Instant now = Instant.now();
 
         LogEntry loginSuccess = new LogEntry(now, "user1", EventType.LOGIN_SUCCESS, "192.168.1.1", null);
-        assertEquals(EventType.LOGIN_SUCCESS, loginSuccess.getEvent());
+        assertEquals(EventType.LOGIN_SUCCESS, loginSuccess.event());
 
         LogEntry loginFailure = new LogEntry(now, "user1", EventType.LOGIN_FAILURE, "192.168.1.1", null);
-        assertEquals(EventType.LOGIN_FAILURE, loginFailure.getEvent());
+        assertEquals(EventType.LOGIN_FAILURE, loginFailure.event());
 
         LogEntry fileUpload = new LogEntry(now, "user1", EventType.FILE_UPLOAD, "192.168.1.1", "file.dat");
-        assertEquals(EventType.FILE_UPLOAD, fileUpload.getEvent());
+        assertEquals(EventType.FILE_UPLOAD, fileUpload.event());
 
         LogEntry fileDownload = new LogEntry(now, "user1", EventType.FILE_DOWNLOAD, "192.168.1.1", "file.dat");
-        assertEquals(EventType.FILE_DOWNLOAD, fileDownload.getEvent());
+        assertEquals(EventType.FILE_DOWNLOAD, fileDownload.event());
 
         LogEntry logout = new LogEntry(now, "user1", EventType.LOGOUT, "192.168.1.1", null);
-        assertEquals(EventType.LOGOUT, logout.getEvent());
+        assertEquals(EventType.LOGOUT, logout.event());
     }
 
     @Test
@@ -103,5 +103,4 @@ public class LogEntryTest {
         });
         assertEquals("IP address cannot be null or blank", exception.getMessage());
     }
-
 }
