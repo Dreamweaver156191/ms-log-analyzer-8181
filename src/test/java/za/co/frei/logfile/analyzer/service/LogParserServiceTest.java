@@ -95,9 +95,37 @@ public class LogParserServiceTest {
 
     @Test
     public void shouldGetTopUploaders() {
-        // TODO: Test getting top uploaders based on FILE_UPLOAD events
-        List<LogEntry> entries = List.of(new LogEntry(Instant.now(), "user1", EventType.FILE_UPLOAD, "192.168.1.1", "file1"));
-        parserService.getTopUploaders(entries, 3);
+        Instant now = Instant.now();
+        List<LogEntry> entries = List.of(
+                new LogEntry(now, "user1", EventType.FILE_UPLOAD, "192.168.1.1", "file1"),
+                new LogEntry(now, "user1", EventType.FILE_UPLOAD, "192.168.1.1", "file2"),
+                new LogEntry(now, "user2", EventType.FILE_UPLOAD, "192.168.1.2", "file3"),
+                new LogEntry(now, "user3", EventType.LOGIN_SUCCESS, "192.168.1.3", null)
+        );
+
+        List<TopUploader> result = parserService.getTopUploaders(entries, 2);
+
+        assertEquals(2, result.size());
+        assertEquals("user1", result.get(0).user());
+        assertEquals(2, result.get(0).uploads());
+        assertEquals("user2", result.get(1).user());
+        assertEquals(1, result.get(1).uploads());
+
+        // Test controller output
+        List<Map<String, Object>> response = result.stream()
+                .map(u -> {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("user", u.user());
+                    map.put("uploads", u.uploads());
+                    return map;
+                })
+                .toList();
+
+        assertEquals(2, response.size());
+        assertEquals("user1", response.get(0).get("user"));
+        assertEquals(2, response.get(0).get("uploads"));
+        assertEquals("user2", response.get(1).get("user"));
+        assertEquals(1, response.get(1).get("uploads"));
     }
 
     @Test
