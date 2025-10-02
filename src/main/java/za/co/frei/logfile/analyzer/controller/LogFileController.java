@@ -9,11 +9,13 @@ import org.springframework.web.multipart.MultipartFile;
 import za.co.frei.logfile.analyzer.exception.FileProcessingException;
 import za.co.frei.logfile.analyzer.model.LogEntry;
 import za.co.frei.logfile.analyzer.model.LoginStats;
+import za.co.frei.logfile.analyzer.model.TopUploader;
 import za.co.frei.logfile.analyzer.model.UploadResponse;
 import za.co.frei.logfile.analyzer.service.LogParserService;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 

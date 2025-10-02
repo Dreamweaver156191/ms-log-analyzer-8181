@@ -14,6 +14,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Service
 public class LogParserService {
@@ -124,37 +125,50 @@ public class LogParserService {
                     String ip = null;
                     String file = null;
 
+                    // Parse event-specific fields based on event type
                     if (event == EventType.LOGIN_SUCCESS || event == EventType.LOGIN_FAILURE) {
+                        // Login events MUST have IP
                         if (parts.length > 3 && parts[3].startsWith("IP=")) {
                             ip = parts[3].substring(3).trim();
                         } else {
-                            logger.warn("Missing or invalid IP at line {}: {}", lineNumber, line);
+                            logger.warn("Missing or invalid IP for login event at line {}: {}", lineNumber, line);
                             errors.incrementAndGet();
                             continue;
                         }
-                    } else if (event == EventType.FILE_UPLOAD || event == EventType.FILE_DOWNLOAD) {
-                        // Case 1: Just FILE=... (no IP provided)
+                    } else if (event == EventType.FILE_UPLOAD) {
+                        // FILE_UPLOAD can have: IP + FILE, or just FILE
                         if (parts.length == 4 && parts[3].startsWith("FILE=")) {
+                            // Case: FILE only
                             file = parts[3].substring(5).trim();
                             ip = "0.0.0.0"; // default placeholder
-                        }
-                        // Case 2: IP=... + FILE=...
-                        else if (parts.length > 4 && parts[3].startsWith("IP=")) {
+                        } else if (parts.length > 4 && parts[3].startsWith("IP=")) {
+                            // Case: IP + FILE
                             ip = parts[3].substring(3).trim();
                             if (parts[4].startsWith("FILE=")) {
                                 file = parts[4].substring(5).trim();
                             } else {
-                                logger.warn("Invalid FILE at line {}: {}", lineNumber, line);
+                                logger.warn("Invalid FILE field at line {}: {}", lineNumber, line);
                                 errors.incrementAndGet();
                                 continue;
                             }
                         } else {
-                            logger.warn("Missing FILE field at line {}: {}", lineNumber, line);
+                            logger.warn("Missing FILE field for FILE_UPLOAD at line {}: {}", lineNumber, line);
+                            errors.incrementAndGet();
+                            continue;
+                        }
+                    } else if (event == EventType.FILE_DOWNLOAD) {
+                        // FILE_DOWNLOAD: only has FILE field, no IP
+                        if (parts.length == 4 && parts[3].startsWith("FILE=")) {
+                            file = parts[3].substring(5).trim();
+                            ip = "0.0.0.0"; // default placeholder
+                        } else {
+                            logger.warn("Missing or invalid FILE field for FILE_DOWNLOAD at line {}: {}", lineNumber, line);
                             errors.incrementAndGet();
                             continue;
                         }
                     } else if (event == EventType.LOGOUT) {
-                        if (parts.length > 3 && !parts[3].isEmpty()) {
+                        // LOGOUT: no additional fields expected
+                        if (parts.length > 3 && !parts[3].trim().isEmpty()) {
                             logger.warn("Unexpected extra field for LOGOUT at line {}: {}", lineNumber, line);
                             errors.incrementAndGet();
                             continue;

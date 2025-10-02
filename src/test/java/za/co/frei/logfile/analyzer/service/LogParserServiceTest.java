@@ -9,12 +9,15 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import za.co.frei.logfile.analyzer.model.EventType;
 import za.co.frei.logfile.analyzer.model.LogEntry;
+import za.co.frei.logfile.analyzer.model.TopUploader;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
