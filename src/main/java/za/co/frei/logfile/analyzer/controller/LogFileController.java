@@ -9,11 +9,11 @@ import org.springframework.web.multipart.MultipartFile;
 import za.co.frei.logfile.analyzer.exception.FileProcessingException;
 import za.co.frei.logfile.analyzer.model.LogEntry;
 import za.co.frei.logfile.analyzer.model.LoginStats;
+import za.co.frei.logfile.analyzer.model.UploadResponse;
 import za.co.frei.logfile.analyzer.service.LogParserService;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -49,7 +49,7 @@ public class LogFileController {
      * @return Upload summary with processing statistics
      */
     @PostMapping("/upload")
-    public ResponseEntity<Map<String, Object>> uploadLog(@RequestParam("file") MultipartFile[] files) {
+    public ResponseEntity<UploadResponse> uploadLog(@RequestParam("file") MultipartFile[] files) {
         logger.info("Processing upload request with {} file(s)", files.length);
 
         // Validate input - let exception handler catch IllegalArgumentException
@@ -100,19 +100,14 @@ public class LogFileController {
                 filesProcessed, files.length, totalEntriesProcessed);
 
         // Build response
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", failedFiles.isEmpty() ? HttpStatus.CREATED.value() : HttpStatus.PARTIAL_CONTENT.value());
-        response.put("message", String.format("Uploaded %d of %d file(s)", filesProcessed, files.length));
-        response.put("filesProcessed", processedFileNames);
-        response.put("processed", totalEntriesProcessed);
-        response.put("totalStored", parserService.getStoredEntryCount());
-
-        if (!failedFiles.isEmpty()) {
-            response.put("failedFiles", failedFiles);
-            response.put("errors", failedFiles.size());
-        } else {
-            response.put("errors", 0);
-        }
+        UploadResponse response = new UploadResponse(
+                String.format("Uploaded %d of %d file(s)", filesProcessed, files.length),
+                processedFileNames,
+                failedFiles,
+                totalEntriesProcessed,
+                parserService.getStoredEntryCount(),
+                failedFiles.size()
+        );
 
         return ResponseEntity
                 .status(failedFiles.isEmpty() ? HttpStatus.CREATED : HttpStatus.PARTIAL_CONTENT)
