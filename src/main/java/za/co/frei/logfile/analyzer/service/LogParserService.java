@@ -226,9 +226,34 @@ public class LogParserService {
         }
     }
 
-    public Map<String, LoginStats> getLoginCounts(List<LogEntry> entries) {
-        // TODO: Implement logic to count LOGIN_SUCCESS and LOGIN_FAILURE per user
-        return null;
+    /**
+     * Retrieves login statistics for all users from pre-aggregated data.
+     * Returns a map of username to LoginStats containing success and failure counts.
+     *
+     * @return Map of user to their login statistics, empty if no login events processed
+     */
+    public Map<String, LoginStats> getLoginCounts() {
+        logger.debug("Generating login counts from aggregated data");
+
+        if (loginStatsByUser.isEmpty()) {
+            logger.debug("No login statistics available - loginStatsByUser is empty");
+            return new HashMap<>();
+        }
+
+        Map<String, LoginStats> result = new HashMap<>();
+
+        for (Map.Entry<String, LoginStatsHolder> entry : loginStatsByUser.entrySet()) {
+            String user = entry.getKey();
+            LoginStatsHolder holder = entry.getValue();
+            result.put(user, new LoginStats(
+                    user,
+                    holder.getSuccessCount(),
+                    holder.getFailureCount()
+            ));
+        }
+
+        logger.info("Returning login stats for {} users", result.size());
+        return result;
     }
 
     public List<TopUploader> getTopUploaders(List<LogEntry> entries, int limit) {

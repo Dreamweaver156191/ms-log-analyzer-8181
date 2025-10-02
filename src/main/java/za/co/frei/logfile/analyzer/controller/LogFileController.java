@@ -6,10 +6,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import za.co.frei.logfile.analyzer.exception.FileProcessingException;
 import za.co.frei.logfile.analyzer.model.LogEntry;
+import za.co.frei.logfile.analyzer.model.LoginStats;
 import za.co.frei.logfile.analyzer.service.LogParserService;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +22,6 @@ import java.util.Map;
 public class LogFileController {
 
     private static final Logger logger = LoggerFactory.getLogger(LogFileController.class);
-
     private final LogParserService parserService;
 
     public LogFileController(LogParserService parserService) {
@@ -35,43 +37,101 @@ public class LogFileController {
                 .body("Log File Analyzer Controller is active!");
     }
 
+    /**
+     * Log File Upload Endpoint
+     *
+     * Accepts one or more log files from different systems and aggregates all data
+     * in memory for cross-system analysis. This allows detection of patterns across
+     * multiple systems (e.g., suspicious login attempts from the same IP across
+     * different system logs).
+     *
+     * @param files One or more .log files to process
+     * @return Upload summary with processing statistics
+     */
     @PostMapping("/upload")
-    public ResponseEntity<Map<String, Object>> uploadLog(@RequestParam("file") MultipartFile file) {
-        logger.info("Processing upload for file: {}", file.getOriginalFilename());
-        if (file.isEmpty()) {
-            logger.warn("Upload attempt with empty file");
-            return ResponseEntity.badRequest().body(Map.of(
-                    "status", HttpStatus.BAD_REQUEST.value(),
-                    "error", "Bad Request",
-                    "message", "File is empty"
-            ));
+    public ResponseEntity<Map<String, Object>> uploadLog(@RequestParam("file") MultipartFile[] files) {
+        logger.info("Processing upload request with {} file(s)", files.length);
+
+        // Validate input - let exception handler catch IllegalArgumentException
+        if (files.length == 0 || (files.length == 1 && files[0].isEmpty())) {
+            logger.warn("Upload attempt with no valid files");
+            throw new IllegalArgumentException("No valid files provided");
         }
-        try {
-            List<LogEntry> entries = parserService.parseLog(file.getInputStream());
-            logger.debug("Parsed {} entries from uploaded file, total stored: {}",
-                    entries.size(), parserService.getStoredEntryCount());
-            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
-                    "status", HttpStatus.CREATED.value(),
-                    "message", "Uploaded " + file.getOriginalFilename(),
-                    "processed", entries.size(),
-                    "totalStored", parserService.getStoredEntryCount(),
-                    "errors", 0
-            ));
-        } catch (IOException e) {
-            logger.error("Error parsing uploaded file: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                    "status", HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                    "error", "Internal Server Error",
-                    "message", "Error processing file: " + e.getMessage()
-            ));
+
+        int totalEntriesProcessed = 0;
+        int filesProcessed = 0;
+        List<String> processedFileNames = new ArrayList<>();
+        List<String> failedFiles = new ArrayList<>();
+
+        for (MultipartFile file : files) {
+            String filename = file.getOriginalFilename();
+
+            if (file.isEmpty()) {
+                logger.warn("Skipping empty file: {}", filename);
+                failedFiles.add(filename);
+                continue;
+            }
+
+            try {
+                logger.info("Processing file: {}", filename);
+                List<LogEntry> entries = parserService.parseLog(file.getInputStream());
+
+                totalEntriesProcessed += entries.size();
+                filesProcessed++;
+                processedFileNames.add(filename);
+
+                logger.debug("Parsed {} entries from {}, total stored: {}",
+                        entries.size(), filename, parserService.getStoredEntryCount());
+
+            } catch (IOException e) {
+                logger.error("Error parsing file {}: {}", filename, e.getMessage());
+                failedFiles.add(filename);
+                // Don't throw - continue processing other files
+            }
         }
+
+        // If ALL files failed, throw exception for handler to catch
+        if (filesProcessed == 0) {
+            logger.error("Failed to process any files out of {} attempts", files.length);
+            throw new FileProcessingException("Failed to process any of the uploaded files");
+        }
+
+        logger.info("Upload complete: {} of {} files processed successfully, {} total entries",
+                filesProcessed, files.length, totalEntriesProcessed);
+
+        // Build response
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", failedFiles.isEmpty() ? HttpStatus.CREATED.value() : HttpStatus.PARTIAL_CONTENT.value());
+        response.put("message", String.format("Uploaded %d of %d file(s)", filesProcessed, files.length));
+        response.put("filesProcessed", processedFileNames);
+        response.put("processed", totalEntriesProcessed);
+        response.put("totalStored", parserService.getStoredEntryCount());
+
+        if (!failedFiles.isEmpty()) {
+            response.put("failedFiles", failedFiles);
+            response.put("errors", failedFiles.size());
+        } else {
+            response.put("errors", 0);
+        }
+
+        return ResponseEntity
+                .status(failedFiles.isEmpty() ? HttpStatus.CREATED : HttpStatus.PARTIAL_CONTENT)
+                .body(response);
     }
 
     @GetMapping("/users/login-counts")
-    public ResponseEntity<Map<String, Map<String, Integer>>> getLoginCounts() {
-        logger.debug("Handling GET request for /users/login-counts endpoint");
-        // TODO: Implement logic to count LOGIN_SUCCESS and LOGIN_FAILURE per user
-        return ResponseEntity.ok(null);
+    public ResponseEntity<Map<String, LoginStats>> getLoginCounts() {
+        logger.debug("GET /users/login-counts");
+
+        Map<String, LoginStats> loginCounts = parserService.getLoginCounts();
+
+        if (loginCounts.isEmpty()) {
+            logger.info("No login data available");
+            return ResponseEntity.noContent().build();
+        }
+
+        logger.debug("Returning login counts for {} users", loginCounts.size());
+        return ResponseEntity.ok(loginCounts);
     }
 
     @GetMapping("/users/top-uploaders")
