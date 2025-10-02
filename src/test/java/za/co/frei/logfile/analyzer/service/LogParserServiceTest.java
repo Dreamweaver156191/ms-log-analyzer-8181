@@ -9,12 +9,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import za.co.frei.logfile.analyzer.model.EventType;
 import za.co.frei.logfile.analyzer.model.LogEntry;
-import za.co.frei.logfile.analyzer.model.LoginStats;
-import za.co.frei.logfile.analyzer.model.SuspiciousWindow;
-import za.co.frei.logfile.analyzer.model.TopUploader;
-
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.time.Instant;
 import java.util.List;
 

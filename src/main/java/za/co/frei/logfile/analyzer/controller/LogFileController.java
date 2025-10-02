@@ -30,7 +30,6 @@ public class LogFileController {
     @GetMapping("/hello")
     public ResponseEntity<String> hello() {
         logger.debug("Handling GET request for /hello endpoint");
-        // TODO: Implement health check logic
         return ResponseEntity.ok()
                 .header("Cache-Control", "no-cache")
                 .body("Log File Analyzer Controller is active!");
@@ -39,7 +38,6 @@ public class LogFileController {
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> uploadLog(@RequestParam("file") MultipartFile file) {
         logger.info("Processing upload for file: {}", file.getOriginalFilename());
-        // TODO: Validate file and handle parsing
         if (file.isEmpty()) {
             logger.warn("Upload attempt with empty file");
             return ResponseEntity.badRequest().body(Map.of(
@@ -49,13 +47,14 @@ public class LogFileController {
             ));
         }
         try {
-            // Ensure parseLog is called and its result is used
             List<LogEntry> entries = parserService.parseLog(file.getInputStream());
-            logger.debug("Parsed {} entries from uploaded file", entries.size());
+            logger.debug("Parsed {} entries from uploaded file, total stored: {}",
+                    entries.size(), parserService.getStoredEntryCount());
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                     "status", HttpStatus.CREATED.value(),
                     "message", "Uploaded " + file.getOriginalFilename(),
                     "processed", entries.size(),
+                    "totalStored", parserService.getStoredEntryCount(),
                     "errors", 0
             ));
         } catch (IOException e) {
