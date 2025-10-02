@@ -9,6 +9,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import za.co.frei.logfile.analyzer.model.EventType;
 import za.co.frei.logfile.analyzer.model.LogEntry;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.Instant;
 import java.util.List;
 
@@ -67,16 +71,24 @@ public class LogParserServiceTest {
     }
 
     @Test
-    public void shouldParseLogFile() {
-        // TODO: Test parsing of log file into List<LogEntry>
+    public void shouldParseLogFile() throws IOException {
+        String logContent =
+                "2025-09-15T08:00:00Z | alice | LOGIN_SUCCESS | IP=192.168.1.1\n" +
+                        "2025-09-15T08:01:00Z | bob | LOGIN_FAILURE | IP=192.168.1.2\n" +
+                        "2025-09-15T08:02:00Z | charlie | FILE_UPLOAD | IP=192.168.1.3 | FILE=report.pdf";
+
+        InputStream inputStream = new ByteArrayInputStream(logContent.getBytes());
+        List<LogEntry> entries = parserService.parseLog(inputStream);
+
+        assertEquals(3, entries.size());
+        assertEquals("alice", entries.get(0).user());
+        assertEquals(EventType.LOGIN_SUCCESS, entries.get(0).event());
+        assertEquals("192.168.1.1", entries.get(0).ip());
+
+        // Verify aggregates were updated
+        assertEquals(3, parserService.getStoredEntryCount());
     }
 
-//    @Test
-//    public void shouldGetLoginCounts() {
-//        // TODO: Test counting LOGIN_SUCCESS and LOGIN_FAILURE per user
-//        List<LogEntry> entries = List.of(new LogEntry(Instant.now(), "user1", EventType.LOGIN_SUCCESS, "192.168.1.1", null));
-//        parserService.getLoginCounts(entries);
-//    }
 
     @Test
     public void shouldGetTopUploaders() {

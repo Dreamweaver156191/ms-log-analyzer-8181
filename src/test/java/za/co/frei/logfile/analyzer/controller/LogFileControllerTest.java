@@ -12,8 +12,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import za.co.frei.logfile.analyzer.service.LogParserService;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
  * Integration tests for LogFileController.
@@ -58,6 +57,44 @@ public class LogFileControllerTest {
         mockMvc.perform(get("/api/v1/logs/hello"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-cache"));
+    }
+
+    @Test
+    public void shouldFilterLoginCountsByUser() throws Exception {
+        String logContent =
+                "2025-09-15T08:00:00Z | alice | LOGIN_SUCCESS | IP=192.168.1.1\n" +
+                        "2025-09-15T08:01:00Z | alice | LOGIN_FAILURE | IP=192.168.1.1\n" +
+                        "2025-09-15T08:02:00Z | bob | LOGIN_SUCCESS | IP=192.168.1.2";
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "test.log", "text/plain", logContent.getBytes()
+        );
+
+        mockMvc.perform(multipart("/api/v1/logs/upload").file(file))
+                .andExpect(status().isCreated());
+
+        // Test filtering by user
+        mockMvc.perform(get("/api/v1/logs/users/login-counts")
+                        .param("user", "alice"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alice").exists())
+                .andExpect(jsonPath("$.bob").doesNotExist());
+    }
+
+    @Test
+    public void shouldReturn204WhenFilteredUserNotFound() throws Exception {
+        String logContent = "2025-09-15T08:00:00Z | alice | LOGIN_SUCCESS | IP=192.168.1.1";
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "test.log", "text/plain", logContent.getBytes()
+        );
+
+        mockMvc.perform(multipart("/api/v1/logs/upload").file(file))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/logs/users/login-counts")
+                        .param("user", "nonexistent"))
+                .andExpect(status().isNoContent());
     }
 
     @Test
