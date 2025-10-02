@@ -1,13 +1,16 @@
-package za.co.frei.logfile.analyzer.model;
+package za.co.frei.logfile.analyzer.service;
 
+import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.List;
 
 /**
  * Thread-safe holder for login statistics.
- * Tracks success/failure counts and separate sets of IPs for each outcome.
+ * Tracks success/failure counts, separate sets of IPs for each outcome,
+ * and timestamps of last successful and failed logins.
  */
 public class LoginStatsHolder {
     private final AtomicInteger successCount = new AtomicInteger(0);
@@ -16,6 +19,10 @@ public class LoginStatsHolder {
     // Thread-safe sets to track unique IPs for each login outcome
     private final Set<String> successIps = ConcurrentHashMap.newKeySet();
     private final Set<String> failureIps = ConcurrentHashMap.newKeySet();
+
+    // Thread-safe references to track last timestamps
+    private final AtomicReference<Instant> lastSuccessTimestamp = new AtomicReference<>(null);
+    private final AtomicReference<Instant> lastFailureTimestamp = new AtomicReference<>(null);
 
     public void incrementSuccess() {
         successCount.incrementAndGet();
@@ -37,6 +44,22 @@ public class LoginStatsHolder {
         }
     }
 
+    public void updateSuccessTimestamp(Instant timestamp) {
+        if (timestamp != null) {
+            lastSuccessTimestamp.updateAndGet(current ->
+                    current == null || timestamp.isAfter(current) ? timestamp : current
+            );
+        }
+    }
+
+    public void updateFailureTimestamp(Instant timestamp) {
+        if (timestamp != null) {
+            lastFailureTimestamp.updateAndGet(current ->
+                    current == null || timestamp.isAfter(current) ? timestamp : current
+            );
+        }
+    }
+
     public int getSuccessCount() {
         return successCount.get();
     }
@@ -53,5 +76,13 @@ public class LoginStatsHolder {
     public List<String> getFailureIps() {
         // Return sorted list for consistent ordering
         return failureIps.stream().sorted().toList();
+    }
+
+    public Instant getLastSuccessTimestamp() {
+        return lastSuccessTimestamp.get();
+    }
+
+    public Instant getLastFailureTimestamp() {
+        return lastFailureTimestamp.get();
     }
 }

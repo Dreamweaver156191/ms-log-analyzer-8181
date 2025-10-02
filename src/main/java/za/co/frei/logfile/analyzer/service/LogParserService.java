@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import za.co.frei.logfile.analyzer.model.*;
-import za.co.frei.logfile.analyzer.model.LoginStatsHolder;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -215,6 +214,7 @@ public class LogParserService {
                         .computeIfAbsent(entry.user(), k -> new LoginStatsHolder());
                 successHolder.incrementSuccess();
                 successHolder.addSuccessIp(entry.ip());
+                successHolder.updateSuccessTimestamp(entry.timestamp());
                 break;
 
             case LOGIN_FAILURE:
@@ -223,6 +223,7 @@ public class LogParserService {
                         .computeIfAbsent(entry.user(), k -> new LoginStatsHolder());
                 failureHolder.incrementFailure();
                 failureHolder.addFailureIp(entry.ip());
+                failureHolder.updateFailureTimestamp(entry.timestamp());
 
                 // Track by IP for suspicious activity detection
                 loginFailuresByIp
@@ -245,7 +246,8 @@ public class LogParserService {
 
     /**
      * Retrieves login statistics for all users from pre-aggregated data.
-     * Returns a map of username to LoginStats containing success/failure counts and separate IP lists.
+     * Returns a map of username to LoginStats containing success/failure counts,
+     * separate IP lists, and timestamps.
      *
      * @return Map of user to their login statistics, empty if no login events processed
      */
@@ -266,8 +268,10 @@ public class LogParserService {
                     user,
                     holder.getSuccessCount(),
                     holder.getFailureCount(),
-                    holder.getSuccessIps(),  // IPs used for successful logins
-                    holder.getFailureIps()   // IPs used for failed logins
+                    holder.getSuccessIps(),           // IPs used for successful logins
+                    holder.getFailureIps(),           // IPs used for failed logins
+                    holder.getLastSuccessTimestamp(), // Last successful login timestamp
+                    holder.getLastFailureTimestamp()  // Last failed login timestamp
             ));
         }
 

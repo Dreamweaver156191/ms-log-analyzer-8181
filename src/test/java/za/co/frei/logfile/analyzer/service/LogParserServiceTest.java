@@ -110,22 +110,6 @@ public class LogParserServiceTest {
         assertEquals(2, result.get(0).uploads());
         assertEquals("user2", result.get(1).user());
         assertEquals(1, result.get(1).uploads());
-
-        // Test controller output
-        List<Map<String, Object>> response = result.stream()
-                .map(u -> {
-                    Map<String, Object> map = new HashMap<>();
-                    map.put("user", u.user());
-                    map.put("uploads", u.uploads());
-                    return map;
-                })
-                .toList();
-
-        assertEquals(2, response.size());
-        assertEquals("user1", response.get(0).get("user"));
-        assertEquals(2, response.get(0).get("uploads"));
-        assertEquals("user2", response.get(1).get("user"));
-        assertEquals(1, response.get(1).get("uploads"));
     }
 
     @Test
