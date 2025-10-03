@@ -7,10 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import za.co.frei.logfile.analyzer.exception.FileProcessingException;
-import za.co.frei.logfile.analyzer.model.LogEntry;
-import za.co.frei.logfile.analyzer.model.LoginStats;
-import za.co.frei.logfile.analyzer.model.TopUploader;
-import za.co.frei.logfile.analyzer.model.UploadResponse;
+import za.co.frei.logfile.analyzer.model.*;
 import za.co.frei.logfile.analyzer.service.LogParserService;
 
 import java.io.IOException;
@@ -174,10 +171,18 @@ public class LogFileController {
     }
 
     @GetMapping("/security/suspicious")
-    public ResponseEntity<List<Map<String, Object>>> getSuspiciousActivity() {
+    public ResponseEntity<List<SuspiciousWindow>> getSuspiciousActivity() {
         logger.debug("Handling GET request for /security/suspicious endpoint");
-        // TODO: Implement logic to detect suspicious LOGIN_FAILURE activity
-        return ResponseEntity.ok(null);
+
+        List<SuspiciousWindow> suspiciousActivity = parserService.getSuspiciousActivity();
+
+        if (suspiciousActivity.isEmpty()) {
+            logger.info("No suspicious activity detected, returning 204 No Content");
+            return ResponseEntity.noContent().build();
+        }
+
+        logger.info("Returning {} suspicious activity window(s)", suspiciousActivity.size());
+        return ResponseEntity.ok(suspiciousActivity);
     }
 
     @GetMapping("/export")

@@ -21,6 +21,9 @@ public class LogParserService {
 
     private static final Logger logger = LoggerFactory.getLogger(LogParserService.class);
 
+    // Inner record to hold login failure event data (timestamp + user)
+    private record LoginFailureEvent(Instant timestamp, String user) {}
+
     // Thread-safe: ConcurrentLinkedQueue allows safe concurrent access without external synchronization
     private final ConcurrentLinkedQueue<LogEntry> storedEntries = new ConcurrentLinkedQueue<>();
 
@@ -31,8 +34,8 @@ public class LogParserService {
     // Maps user -> number of file uploads
     private final ConcurrentHashMap<String, AtomicInteger> uploadCountsByUser = new ConcurrentHashMap<>();
 
-    // Maps IP -> timestamps of login failures (for suspicious activity detection)
-    private final ConcurrentHashMap<String, ConcurrentLinkedQueue<Instant>> loginFailuresByIp = new ConcurrentHashMap<>();
+    // Maps IP -> login failure events (timestamp + user) for suspicious activity detection
+    private final ConcurrentHashMap<String, ConcurrentLinkedQueue<LoginFailureEvent>> loginFailuresByIp = new ConcurrentHashMap<>();
 
     // Thread-safe: AtomicInteger provides atomic operations for thread-safe counter
     private final AtomicInteger errors = new AtomicInteger(0);
@@ -59,7 +62,7 @@ public class LogParserService {
     /**
      * Returns login failures grouped by IP. Thread-safe snapshot.
      */
-    protected Map<String, ConcurrentLinkedQueue<Instant>> getLoginFailuresByIp() {
+    protected Map<String, ConcurrentLinkedQueue<LoginFailureEvent>> getLoginFailuresByIp() {
         return new HashMap<>(loginFailuresByIp);
     }
 
@@ -225,10 +228,10 @@ public class LogParserService {
                 failureHolder.addFailureIp(entry.ip());
                 failureHolder.updateFailureTimestamp(entry.timestamp());
 
-                // Track by IP for suspicious activity detection
+                // Track by IP for suspicious activity detection (now includes user)
                 loginFailuresByIp
                         .computeIfAbsent(entry.ip(), k -> new ConcurrentLinkedQueue<>())
-                        .add(entry.timestamp());
+                        .add(new LoginFailureEvent(entry.timestamp(), entry.user()));
                 break;
 
             case FILE_UPLOAD:
@@ -309,8 +312,100 @@ public class LogParserService {
         return uploadCountsByUser.size();
     }
 
-    public List<SuspiciousWindow> getSuspiciousActivity(List<LogEntry> entries) {
-        // TODO: Implement logic to detect suspicious LOGIN_FAILURE activity
-        return null;
+    /**
+     * Detects suspicious login activity: IPs with more than 3 LOGIN_FAILURE attempts
+     * within a 5-minute window.
+     *
+     * @return List of suspicious activity windows, empty if none detected
+     */
+    public List<SuspiciousWindow> getSuspiciousActivity() {
+        logger.debug("Analyzing login failures for suspicious activity");
+
+        logger.info("loginFailuresByIp contains {} IPs", loginFailuresByIp.size());
+        for (Map.Entry<String, ConcurrentLinkedQueue<LoginFailureEvent>> entry : loginFailuresByIp.entrySet()) {
+            logger.info("IP: {} has {} failure events", entry.getKey(), entry.getValue().size());
+        }
+
+        if (loginFailuresByIp.isEmpty()) {
+            logger.debug("No login failure data available");
+            return List.of();
+        }
+
+        List<SuspiciousWindow> suspiciousWindows = new ArrayList<>();
+        final long FIVE_MINUTES_SECONDS = 300; // 5 minutes in seconds
+
+        for (Map.Entry<String, ConcurrentLinkedQueue<LoginFailureEvent>> entry : loginFailuresByIp.entrySet()) {
+            String ip = entry.getKey();
+            List<LoginFailureEvent> events = new ArrayList<>(entry.getValue());
+
+            // Skip IPs with 3 or fewer failures (not suspicious)
+            if (events.size() <= 3) {
+                logger.debug("IP {} has only {} failures, skipping", ip, events.size());
+                continue;
+            }
+
+            // Sort events chronologically by timestamp
+            events.sort(Comparator.comparing(LoginFailureEvent::timestamp));
+
+            logger.info("Analyzing IP {} with {} failures", ip, events.size());
+
+            // Sliding window approach: check every possible window of failures
+            for (int i = 0; i < events.size(); i++) {
+                Instant windowStart = events.get(i).timestamp();
+                List<LoginFailureEvent> windowEvents = new ArrayList<>();
+                windowEvents.add(events.get(i));
+
+                // Find how many failures occur within 5 minutes of this start
+                for (int j = i + 1; j < events.size(); j++) {
+                    LoginFailureEvent current = events.get(j);
+                    long secondsDiff = current.timestamp().getEpochSecond() - windowStart.getEpochSecond();
+
+                    logger.debug("Checking timestamp {} against window start {}, diff: {} seconds",
+                            current.timestamp(), windowStart, secondsDiff);
+
+                    if (secondsDiff <= FIVE_MINUTES_SECONDS) {
+                        windowEvents.add(current);
+                    } else {
+                        break; // No more timestamps will be within window
+                    }
+                }
+
+                logger.debug("Window starting at {} contains {} failures", windowStart, windowEvents.size());
+
+                // If we found more than 3 failures in this window, it's suspicious
+                if (windowEvents.size() > 3) {
+                    Instant windowEnd = windowEvents.get(windowEvents.size() - 1).timestamp();
+
+                    List<Instant> timestamps = windowEvents.stream()
+                            .map(LoginFailureEvent::timestamp)
+                            .toList();
+
+                    List<String> users = windowEvents.stream()
+                            .map(LoginFailureEvent::user)
+                            .toList();
+
+                    SuspiciousWindow window = new SuspiciousWindow(
+                            ip,
+                            windowStart,
+                            windowEnd,
+                            windowEvents.size(),
+                            timestamps,
+                            users
+                    );
+
+                    suspiciousWindows.add(window);
+
+                    logger.info("Detected suspicious activity from IP {}: {} failures between {} and {}",
+                            ip, windowEvents.size(), windowStart, windowEnd);
+
+                    // Move to next potential window to avoid overlapping detections
+                    i = i + windowEvents.size() - 1;
+                    break; // Move to next IP after finding first suspicious window
+                }
+            }
+        }
+
+        logger.info("Found {} suspicious activity window(s)", suspiciousWindows.size());
+        return suspiciousWindows;
     }
 }

@@ -3,7 +3,14 @@ package za.co.frei.logfile.analyzer.model;
 import java.time.Instant;
 import java.util.List;
 
-public record SuspiciousWindow(String ip, Instant start, Instant end, int failures, List<Instant> timestamps) {
+public record SuspiciousWindow(
+        String ip,
+        Instant start,
+        Instant end,
+        int failures,
+        List<Instant> timestamps,
+        List<String> users  // Add this field
+) {
 
     public SuspiciousWindow {
         if (ip == null || ip.isBlank()) {
@@ -27,5 +34,15 @@ public record SuspiciousWindow(String ip, Instant start, Instant end, int failur
         if (timestamps.size() != failures) {
             throw new IllegalArgumentException("Number of timestamps must match failure count");
         }
+        if (users == null || users.isEmpty()) {
+            throw new IllegalArgumentException("Users cannot be null or empty");
+        }
+        if (users.size() != failures) {
+            throw new IllegalArgumentException("Number of users must match failure count");
+        }
+
+        // Make lists immutable
+        timestamps = List.copyOf(timestamps);
+        users = List.copyOf(users);
     }
 }

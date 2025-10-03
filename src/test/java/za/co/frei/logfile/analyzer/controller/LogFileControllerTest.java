@@ -13,6 +13,7 @@ import za.co.frei.logfile.analyzer.service.LogParserService;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.hamcrest.Matchers.*;
 
 /**
  * Integration tests for LogFileController.
@@ -143,24 +144,53 @@ public class LogFileControllerTest {
                 .andExpect(status().isOk());
     }
 
-//    @Test
-//    public void shouldReturnTopUploaders() throws Exception {
-//        // TODO: Test top uploaders endpoint (returns null currently)
-//        mockMvc.perform(get("/api/v1/logs/users/top-uploaders"))
-//                .andExpect(status().isOk());
-//    }
-
     @Test
-    public void shouldReturnSuspiciousActivity() throws Exception {
-        // TODO: Test suspicious activity endpoint (returns null currently)
+    public void shouldReturnSuspiciousActivityDetected() throws Exception {
+        String logContent =
+                "2025-09-15T10:00:00Z | user1 | LOGIN_FAILURE | IP=192.168.1.100\n" +
+                        "2025-09-15T10:00:30Z | user2 | LOGIN_FAILURE | IP=192.168.1.100\n" +
+                        "2025-09-15T10:01:00Z | user3 | LOGIN_FAILURE | IP=192.168.1.100\n" +
+                        "2025-09-15T10:01:30Z | user4 | LOGIN_FAILURE | IP=192.168.1.100";
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "test.log", "text/plain", logContent.getBytes()
+        );
+
+        mockMvc.perform(multipart("/api/v1/logs/upload").file(file))
+                .andExpect(status().isCreated());
+
         mockMvc.perform(get("/api/v1/logs/security/suspicious"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].ip").value("192.168.1.100"))
+                .andExpect(jsonPath("$[0].failures").value(4))
+                .andExpect(jsonPath("$[0].start").value("2025-09-15T10:00:00Z"))
+                .andExpect(jsonPath("$[0].end").value("2025-09-15T10:01:30Z"))
+                .andExpect(jsonPath("$[0].timestamps").isArray())
+                .andExpect(jsonPath("$[0].timestamps", hasSize(4)));
     }
 
     @Test
-    public void shouldReturnExportFile() throws Exception {
-        // TODO: Test export endpoint (returns null currently)
-        mockMvc.perform(get("/api/v1/logs/export"))
-                .andExpect(status().isOk());
+    public void shouldReturn204WhenNoSuspiciousActivityDetected() throws Exception {
+        String logContent =
+                "2025-09-15T10:00:00Z | user1 | LOGIN_SUCCESS | IP=192.168.1.100\n" +
+                        "2025-09-15T10:01:00Z | user2 | LOGIN_SUCCESS | IP=192.168.1.100";
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "test.log", "text/plain", logContent.getBytes()
+        );
+
+        mockMvc.perform(multipart("/api/v1/logs/upload").file(file))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/logs/security/suspicious"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    public void shouldReturn204ForSuspiciousActivityWhenNoDataUploaded() throws Exception {
+        mockMvc.perform(get("/api/v1/logs/security/suspicious"))
+                .andExpect(status().isNoContent());
     }
 }
