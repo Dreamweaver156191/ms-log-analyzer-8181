@@ -15,7 +15,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import za.co.frei.logfile.analyzer.exception.ExportException;
 
+import java.time.Instant;
 @RestController
 @RequestMapping("/api/v1/logs")
 public class LogFileController {
@@ -185,10 +192,51 @@ public class LogFileController {
         return ResponseEntity.ok(suspiciousActivity);
     }
 
+    /**
+     * Export Analysis Results Endpoint
+     *
+     * Generates a downloadable JSON file containing all log analysis results including
+     * login statistics, top uploaders, and suspicious activity detection.
+     *
+     * @return JSON file as byte array with appropriate headers for download
+     * @throws ExportException if JSON generation fails
+     */
     @GetMapping("/export")
     public ResponseEntity<byte[]> exportResults() {
         logger.debug("Handling GET request for /export endpoint");
-        // TODO: Implement logic to export results as JSON file
-        return ResponseEntity.ok().body(null);
+
+        try {
+            // Build structured export response
+            ExportResponse exportData = new ExportResponse(
+                    Instant.now().toString(),
+                    parserService.getStoredEntryCount(),
+                    parserService.getLoginCounts(),
+                    parserService.getTopUploaders(3),
+                    parserService.getSuspiciousActivity()
+            );
+
+            // Configure JSON mapper with pretty printing and Java 8 date/time support
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.registerModule(new JavaTimeModule());
+            mapper.enable(SerializationFeature.INDENT_OUTPUT);
+
+            byte[] jsonBytes = mapper.writeValueAsBytes(exportData);
+
+            logger.info("Successfully exported {} bytes of analysis results with {} login stats, {} top uploaders, {} suspicious activities",
+                    jsonBytes.length,
+                    exportData.loginStatistics().size(),
+                    exportData.topUploaders().size(),
+                    exportData.suspiciousActivity().size());
+
+            // Return as downloadable JSON file
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=log-analysis-export.json")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(jsonBytes);
+
+        } catch (Exception e) {
+            logger.error("Error exporting results: {}", e.getMessage(), e);
+            throw new ExportException("Failed to generate export file", e);
+        }
     }
 }

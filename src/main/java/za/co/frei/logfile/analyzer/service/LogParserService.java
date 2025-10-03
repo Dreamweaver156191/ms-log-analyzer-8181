@@ -3,6 +3,7 @@ package za.co.frei.logfile.analyzer.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import za.co.frei.logfile.analyzer.exception.FileProcessingException;
 import za.co.frei.logfile.analyzer.model.*;
 
 import java.io.BufferedReader;
@@ -201,7 +202,7 @@ public class LogParserService {
                     entries.size(), storedEntries.size(), errors.get());
         } catch (IOException e) {
             logger.error("Error reading log file: {}", e.getMessage(), e);
-            throw new RuntimeException("Error parsing log file", e);
+            throw new FileProcessingException("Error parsing log file", e);
         }
         return entries;
     }
