@@ -117,8 +117,11 @@ public class LogFileController {
                     "For uploading multiple files simultaneously, use POST /upload endpoint via Postman or cURL.\n\n" +
                     "**Expected Log Format:**\n" +
                     "```\n" +
-                    "2024-01-15T10:30:00Z | user1 | LOGIN_SUCCESS | IP=192.168.1.100\n" +
-                    "2024-01-15T10:31:00Z | user2 | FILE_UPLOAD | IP=192.168.1.101 | FILE=report.pdf\n" +
+                    "2025-09-15T10:30:00Z | user1 | LOGIN_SUCCESS | IP=192.168.1.100\n" +
+                    "2025-09-15T10:31:00Z | user2 | LOGIN_FAILURE | IP=192.168.1.200\n" +
+                    "2025-09-15T10:32:00Z | user3 | FILE_UPLOAD | FILE=report.pdf\n" +
+                    "2025-09-15T10:33:00Z | user4 | FILE_DOWNLOAD | FILE=data.csv\n" +
+                    "2025-09-15T10:34:00Z | user5 | LOGOUT\n" +
                     "```"
     )
     @ApiResponses({
@@ -201,8 +204,11 @@ public class LogFileController {
                     "```\n\n" +
                     "**Expected Log Format:**\n" +
                     "```\n" +
-                    "2024-01-15T10:30:00Z | user1 | LOGIN_SUCCESS | IP=192.168.1.100\n" +
-                    "2024-01-15T10:31:00Z | user2 | FILE_UPLOAD | IP=192.168.1.101 | FILE=report.pdf\n" +
+                    "2025-09-15T10:30:00Z | user1 | LOGIN_SUCCESS | IP=192.168.1.100\n" +
+                    "2025-09-15T10:31:00Z | user2 | LOGIN_FAILURE | IP=192.168.1.200\n" +
+                    "2025-09-15T10:32:00Z | user3 | FILE_UPLOAD | FILE=report.pdf\n" +
+                    "2025-09-15T10:33:00Z | user4 | FILE_DOWNLOAD | FILE=data.csv\n" +
+                    "2025-09-15T10:34:00Z | user5 | LOGOUT\n" +
                     "```"
     )
     @ApiResponses({
