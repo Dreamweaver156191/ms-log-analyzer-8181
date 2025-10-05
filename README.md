@@ -1,4 +1,3 @@
-Here's a comprehensive README.md for your project:
 
 ```markdown
 # Log File Analyzer
@@ -127,7 +126,6 @@ Log entries must follow this pipe-delimited format:
 3. **FILE_UPLOAD** (requires FILE)
    ```
    2025-09-15T08:02:00Z | charlie | FILE_UPLOAD | FILE=report.pdf
-   2025-09-15T08:03:00Z | david | FILE_UPLOAD | IP=192.168.1.3 | FILE=data.csv
    ```
 
 4. **FILE_DOWNLOAD** (requires FILE)
