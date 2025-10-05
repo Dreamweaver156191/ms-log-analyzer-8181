@@ -1,11 +1,21 @@
 server:
   port: 8181
+  error:
+    include-message: always
+    include-binding-errors: always
 
 spring:
   application:
     name: logfile-analyzer
   profiles:
     active: dev
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 100MB
+      file-size-threshold: 2KB
 
 project:
   name: Log File Analyzer
@@ -16,8 +26,13 @@ logging:
   level:
     root: INFO
     za.co.frei.logfile.analyzer: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+  file:
+    name: logs/logfile-analyzer.log
+    max-size: 10MB
+    max-history: 7
 
-# Swagger/OpenAPI Configuration
 springdoc:
   api-docs:
     path: /api-docs

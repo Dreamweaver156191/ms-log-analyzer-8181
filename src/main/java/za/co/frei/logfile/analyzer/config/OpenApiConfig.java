@@ -40,14 +40,14 @@ public class OpenApiConfig {
                                 .name("Francois van der Merwe")
                                 .email("francois156191@gmail.com"))
                         .license(new License()
-                                .name("MIT License")
+                                .name("Assessment Project")
                                 .url("https://opensource.org/licenses/MIT")))
                 .servers(List.of(
                         new Server()
                                 .url("http://localhost:8181")
                                 .description("Local Development Server"),
                         new Server()
-                                .url("https://api.example.com")  // Update after deployment
+                                .url("https://api.example.com")
                                 .description("Production Server")
                 ));
     }

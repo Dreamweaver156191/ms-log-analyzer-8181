@@ -32,6 +32,27 @@ import za.co.frei.logfile.analyzer.exception.ExportException;
 
 import java.time.Instant;
 
+/**
+ * REST Controller for log file analysis operations.
+ * <p>
+ * Provides endpoints for:
+ * <ul>
+ *   <li>Uploading and parsing log files (single or multiple)</li>
+ *   <li>Retrieving login statistics per user</li>
+ *   <li>Identifying top file uploaders</li>
+ *   <li>Detecting suspicious login activity (brute-force patterns)</li>
+ *   <li>Exporting complete analysis results to JSON</li>
+ * </ul>
+ * <p>
+ * All data is stored in memory using thread-safe concurrent data structures.
+ * Statistics are pre-aggregated during parsing for O(1) query performance.
+ * <p>
+ * Base path: {@code /api/v1/logs}
+ *
+ * @author Francois van der Merwe
+ * @version 5.0
+ * @since 2025-01-15
+ */
 @RestController
 @RequestMapping("/api/v1/logs")
 @Tag(name = "Log File Analyzer", description = "Endpoints for log file analysis and security monitoring")
@@ -40,11 +61,24 @@ public class LogFileController {
     private static final Logger logger = LoggerFactory.getLogger(LogFileController.class);
     private final LogParserService parserService;
 
+    /**
+     * Constructs the controller with dependency injection of the log parser service.
+     *
+     * @param parserService the service responsible for parsing and analyzing log files
+     */
     public LogFileController(LogParserService parserService) {
         this.parserService = parserService;
         logger.info("LogFileController initialized");
     }
 
+    /**
+     * Health check endpoint to verify API availability.
+     * <p>
+     * This endpoint can be used by monitoring tools or load balancers to check
+     * if the application is running and responsive.
+     *
+     * @return ResponseEntity with a success message and 200 OK status
+     */
     @GetMapping("/hello")
     @Operation(
             summary = "Health check endpoint",
@@ -59,13 +93,22 @@ public class LogFileController {
     }
 
     /**
-     * Single File Upload Endpoint (Swagger UI Compatible)
+     * Uploads a single log file for analysis (Swagger UI compatible endpoint).
+     * <p>
+     * This endpoint accepts a single file and is optimized for testing through
+     * Swagger UI, which has limitations with multipart file arrays. For uploading
+     * multiple files simultaneously, use the {@link #uploadLog(MultipartFile[])} endpoint
+     * via Postman or cURL.
+     * <p>
+     * The file is parsed line-by-line, with each valid entry stored in memory
+     * and aggregated for fast querying. Invalid lines are logged but don't fail
+     * the entire upload.
      *
-     * Accepts a single log file for processing. This endpoint is optimized for Swagger UI testing.
-     * For uploading multiple files simultaneously, use the /upload endpoint via Postman or cURL.
-     *
-     * @param file A single .log file to process
-     * @return Upload summary with processing statistics
+     * @param file the log file to process (.log format recommended)
+     * @return ResponseEntity containing upload statistics including number of entries
+     *         processed, files processed, and any errors encountered
+     * @throws IllegalArgumentException if the file is empty
+     * @throws FileProcessingException if file processing completely fails
      */
     @PostMapping(value = "/upload-single", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
@@ -108,29 +151,36 @@ public class LogFileController {
 
         logger.info("Processing single file upload via Swagger UI: {}", file.getOriginalFilename());
 
-        // Validate file
         if (file.isEmpty()) {
             logger.warn("Empty file provided");
             throw new IllegalArgumentException("File cannot be empty");
         }
 
-        // Reuse existing multi-file upload logic by converting to array
         return uploadLog(new MultipartFile[]{file});
     }
 
     /**
-     * Log File Upload Endpoint (Multiple Files)
+     * Uploads one or more log files for analysis and aggregation.
+     * <p>
+     * This endpoint accepts multiple log files from different systems and aggregates
+     * all data in memory. This enables cross-system analysis, such as detecting
+     * suspicious login attempts from the same IP address across different system logs.
+     * <p>
+     * Files are processed sequentially. If some files fail to parse, successful
+     * files are still stored and processed (partial success). If all files fail,
+     * a FileProcessingException is thrown.
+     * <p>
+     * Each log entry is validated and parsed according to the expected format:
+     * {@code timestamp | user | event | event-specific-fields}
+     * <p>
+     * Statistics are computed during parsing and stored in concurrent data structures
+     * for thread-safe, high-performance querying.
      *
-     * Accepts one or more log files from different systems and aggregates all data
-     * in memory for cross-system analysis. This allows detection of patterns across
-     * multiple systems (e.g., suspicious login attempts from the same IP across
-     * different system logs).
-     *
-     * Note: Due to Swagger UI limitations with multipart arrays, use /upload-single
-     * for testing in Swagger UI, or use Postman/cURL for this endpoint.
-     *
-     * @param files One or more .log files to process
-     * @return Upload summary with processing statistics
+     * @param files array of log files to process (must contain at least one valid file)
+     * @return ResponseEntity with status 201 (all successful) or 206 (partial success)
+     *         containing detailed upload statistics
+     * @throws IllegalArgumentException if no valid files are provided
+     * @throws FileProcessingException if all files fail to process
      */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
@@ -204,7 +254,6 @@ public class LogFileController {
             @RequestPart("file") MultipartFile[] files) {
         logger.info("Processing upload request with {} file(s)", files.length);
 
-        // Validate input - let exception handler catch IllegalArgumentException
         if (files.length == 0 || (files.length == 1 && files[0].isEmpty())) {
             logger.warn("Upload attempt with no valid files");
             throw new IllegalArgumentException("No valid files provided");
@@ -238,11 +287,9 @@ public class LogFileController {
             } catch (IOException e) {
                 logger.error("Error parsing file {}: {}", filename, e.getMessage());
                 failedFiles.add(filename);
-                // Don't throw - continue processing other files
             }
         }
 
-        // If ALL files failed, throw exception for handler to catch
         if (filesProcessed == 0) {
             logger.error("Failed to process any files out of {} attempts", files.length);
             throw new FileProcessingException("Failed to process any of the uploaded files");
@@ -251,7 +298,6 @@ public class LogFileController {
         logger.info("Upload complete: {} of {} files processed successfully, {} total entries",
                 filesProcessed, files.length, totalEntriesProcessed);
 
-        // Build response
         UploadResponse response = new UploadResponse(
                 String.format("Uploaded %d of %d file(s)", filesProcessed, files.length),
                 processedFileNames,
@@ -266,6 +312,24 @@ public class LogFileController {
                 .body(response);
     }
 
+    /**
+     * Retrieves login statistics for all users or a specific user.
+     * <p>
+     * Returns aggregated login data including:
+     * <ul>
+     *   <li>Total successful login attempts</li>
+     *   <li>Total failed login attempts</li>
+     *   <li>List of IP addresses used for successful logins</li>
+     *   <li>List of IP addresses used for failed logins</li>
+     *   <li>Timestamp of most recent successful login</li>
+     *   <li>Timestamp of most recent failed login</li>
+     * </ul>
+     * <p>
+     * Data is retrieved from pre-aggregated statistics for O(1) performance.
+     *
+     * @param user optional username filter; if provided, returns stats for only that user
+     * @return ResponseEntity with status 200 and login statistics map, or 204 if no data exists
+     */
     @GetMapping("/users/login-counts")
     @Operation(
             summary = "Get login statistics per user",
@@ -310,7 +374,6 @@ public class LogFileController {
             return ResponseEntity.noContent().build();
         }
 
-        // Filter by user if specified
         if (user != null && !user.isBlank()) {
             LoginStats stats = loginCounts.get(user);
             if (stats == null) {
@@ -324,6 +387,18 @@ public class LogFileController {
         return ResponseEntity.ok(loginCounts);
     }
 
+    /**
+     * Retrieves the top file uploaders ranked by number of FILE_UPLOAD events.
+     * <p>
+     * Users are sorted in descending order by upload count. The number of results
+     * is controlled by the limit parameter (default: 3).
+     * <p>
+     * Uses pre-aggregated upload counts for O(1) lookup and O(n log n) sorting performance.
+     *
+     * @param limit maximum number of top uploaders to return (must be positive)
+     * @return ResponseEntity with status 200 and list of top uploaders, or 204 if no upload data exists
+     * @throws IllegalArgumentException if limit is not positive
+     */
     @GetMapping("/users/top-uploaders")
     @Operation(
             summary = "Get top file uploaders",
@@ -363,10 +438,8 @@ public class LogFileController {
             throw new IllegalArgumentException("Limit must be positive");
         }
 
-        // Call the new method signature with just limit parameter
         List<TopUploader> topUploaders = parserService.getTopUploaders(limit);
 
-        // Return 204 No Content if no upload data exists
         if (topUploaders.isEmpty()) {
             logger.info("No upload data available, returning 204 No Content");
             return ResponseEntity.noContent().build();
@@ -385,6 +458,26 @@ public class LogFileController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Detects suspicious login activity indicative of brute-force attacks.
+     * <p>
+     * Analyzes LOGIN_FAILURE events to identify IP addresses with more than 3 failed
+     * login attempts within a 5-minute window. This pattern is commonly associated with
+     * brute-force password attacks or credential stuffing attempts.
+     * <p>
+     * Uses a sliding window algorithm to detect suspicious patterns across all stored
+     * login failure events. Each suspicious window includes:
+     * <ul>
+     *   <li>IP address of the attacker</li>
+     *   <li>Start and end timestamps of the suspicious activity window</li>
+     *   <li>Total number of failures in the window</li>
+     *   <li>Exact timestamps of each failure</li>
+     *   <li>Usernames targeted in each failure</li>
+     * </ul>
+     *
+     * @return ResponseEntity with status 200 and list of suspicious activity windows,
+     *         or 204 if no suspicious activity detected
+     */
     @GetMapping("/security/suspicious")
     @Operation(
             summary = "Detect suspicious login activity",
@@ -438,13 +531,25 @@ public class LogFileController {
     }
 
     /**
-     * Export Analysis Results Endpoint
+     * Exports all analysis results to a downloadable JSON file.
+     * <p>
+     * Generates a comprehensive JSON export containing:
+     * <ul>
+     *   <li>Export timestamp</li>
+     *   <li>Total number of log entries stored</li>
+     *   <li>Complete login statistics for all users</li>
+     *   <li>Top 3 file uploaders</li>
+     *   <li>All detected suspicious activity windows</li>
+     * </ul>
+     * <p>
+     * The JSON is formatted with indentation for readability and includes proper
+     * timestamp handling via Jackson's JavaTimeModule.
+     * <p>
+     * The response includes appropriate headers to trigger browser download:
+     * {@code Content-Disposition: attachment; filename=log-analysis-export.json}
      *
-     * Generates a downloadable JSON file containing all log analysis results including
-     * login statistics, top uploaders, and suspicious activity detection.
-     *
-     * @return JSON file as byte array with appropriate headers for download
-     * @throws ExportException if JSON generation fails
+     * @return ResponseEntity containing the JSON data as a byte array with 200 OK status
+     * @throws ExportException if JSON serialization fails
      */
     @GetMapping("/export")
     @Operation(
@@ -470,7 +575,6 @@ public class LogFileController {
         logger.debug("Handling GET request for /export endpoint");
 
         try {
-            // Build structured export response
             ExportResponse exportData = new ExportResponse(
                     Instant.now().toString(),
                     parserService.getStoredEntryCount(),
@@ -479,7 +583,6 @@ public class LogFileController {
                     parserService.getSuspiciousActivity()
             );
 
-            // Configure JSON mapper with pretty printing and Java 8 date/time support
             ObjectMapper mapper = new ObjectMapper();
             mapper.registerModule(new JavaTimeModule());
             mapper.enable(SerializationFeature.INDENT_OUTPUT);
@@ -492,7 +595,6 @@ public class LogFileController {
                     exportData.topUploaders().size(),
                     exportData.suspiciousActivity().size());
 
-            // Return as downloadable JSON file
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=log-analysis-export.json")
                     .contentType(MediaType.APPLICATION_JSON)
