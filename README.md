@@ -1,10 +1,11 @@
 
-````markdown
+```markdown
 # Log File Analyzer  
 
 [![Java](https://img.shields.io/badge/Java-17-orange.svg)](https://www.oracle.com/java/) 
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.5-brightgreen.svg)](https://spring.io/projects/spring-boot) 
-[![Maven](https://img.shields.io/badge/Maven-3.6+-blue.svg)](https://maven.apache.org/)  
+[![Maven](https://img.shields.io/badge/Maven-3.6+-blue.svg)](https://maven.apache.org/)
+[![Deployment](https://img.shields.io/badge/Deployed%20on-Render-46E3B7.svg)](https://ms-log-analyzer-8181.onrender.com)
 
 A robust Spring Boot REST API application that parses system log files, performs security analysis, and provides comprehensive analytics endpoints with interactive Swagger documentation.  
 
@@ -32,6 +33,8 @@ This application processes log files from multiple systems, stores entries in me
 - ✅ Interactive Swagger/OpenAPI documentation  
 - ✅ JSON export functionality  
 - ✅ Extensive unit test coverage  
+- ✅ Docker containerization with multi-stage builds
+- ✅ Automated CI/CD pipeline with GitHub Actions
 
 ---
 
@@ -47,15 +50,15 @@ This application processes log files from multiple systems, stores entries in me
 
 ```bash
 # Clone the repository
-git clone <your-repo-url>
-cd logfile-analyzer  
+git clone https://github.com/Dreamweaver156191/ms-log-analyzer-8181.git
+cd ms-log-analyzer-8181
 
 # Build with Maven
 mvn clean package  
 
 # Run tests
 mvn test
-````
+```
 
 ---
 
@@ -75,7 +78,45 @@ java -Xmx2g -Xms512m -jar target/ms-logfile-analyzer-2025-0.0.1-SNAPSHOT.jar
 java -jar target/ms-logfile-analyzer-2025-0.0.1-SNAPSHOT.jar --server.port=8080
 ```
 
-The application will start on **[http://localhost:8181](http://localhost:8181)**
+The application will start on **http://localhost:8181**
+
+---
+
+## Live Deployment
+
+The application is deployed on Render.com and accessible at:
+
+**Base URL:** https://ms-log-analyzer-8181.onrender.com
+
+**Quick Links:**
+- 🔗 Health Check: https://ms-log-analyzer-8181.onrender.com/api/v1/logs/hello
+- 📚 Swagger UI: https://ms-log-analyzer-8181.onrender.com/swagger-ui.html
+- 📄 API Docs: https://ms-log-analyzer-8181.onrender.com/api-docs
+
+**Note:** Free tier instances spin down after 15 minutes of inactivity. First request after idle period may take 30-60 seconds to wake up the service.
+
+### Testing the Live API
+
+```bash
+# Health check
+curl https://ms-log-analyzer-8181.onrender.com/api/v1/logs/hello
+
+# Get login statistics (after uploading data)
+curl https://ms-log-analyzer-8181.onrender.com/api/v1/logs/users/login-counts
+
+# Upload a log file
+curl -X POST https://ms-log-analyzer-8181.onrender.com/api/v1/logs/upload \
+  -F "file=@system_logs.log"
+```
+
+### Deployment Architecture
+
+- **Platform:** Render.com
+- **Container Runtime:** Docker
+- **Build:** Multi-stage Dockerfile (Maven build + JRE runtime)
+- **CI/CD:** GitHub Actions validates builds on production branch
+- **Deployment:** Automatic deployment on push to `production` branch
+- **Image:** Alpine-based JRE 17 with non-root user for security
 
 ---
 
@@ -110,8 +151,13 @@ java -Xmx4g -Xms1g -jar target/ms-logfile-analyzer-2025-0.0.1-SNAPSHOT.jar
 
 Access the interactive API documentation at:
 
-* **Swagger UI**: [http://localhost:8181/swagger-ui.html](http://localhost:8181/swagger-ui.html)
-* **OpenAPI JSON**: [http://localhost:8181/api-docs](http://localhost:8181/api-docs)
+**Local Development:**
+* Swagger UI: http://localhost:8181/swagger-ui.html
+* OpenAPI JSON: http://localhost:8181/api-docs
+
+**Live Deployment:**
+* Swagger UI: https://ms-log-analyzer-8181.onrender.com/swagger-ui.html
+* OpenAPI JSON: https://ms-log-analyzer-8181.onrender.com/api-docs
 
 The Swagger UI provides:
 
@@ -169,9 +215,8 @@ Log entries must follow this pipe-delimited format:
 
 ### Base URL
 
-```
-http://localhost:8181/api/v1/logs
-```
+**Local:** `http://localhost:8181/api/v1/logs`  
+**Live:** `https://ms-log-analyzer-8181.onrender.com/api/v1/logs`
 
 ### 1. Health Check
 
@@ -384,6 +429,9 @@ springdoc:
 * **SpringDoc OpenAPI 2.7.0** – API documentation
 * **Jackson** – JSON processing
 * **SLF4J/Logback** – Logging
+* **Docker** – Containerization
+* **GitHub Actions** – CI/CD pipeline
+* **Render.com** – Cloud deployment platform
 
 ### Key Design Decisions
 
@@ -482,8 +530,8 @@ Use the `/upload-single` endpoint in Swagger UI, or use Postman/cURL for the `/u
 ### Parsing errors
 
 * Verify log file format matches expected pattern
-* Check application logs at `logs/logfile-analyzer.log`
 * Ensure timestamps are in ISO-8601 format
+* Check application logs for detailed error messages
 
 ---
 
@@ -493,9 +541,9 @@ This project is created for assessment purposes.
 
 ---
 
-**Version:** 0.0.1-SNAPSHOT
-**Spring Boot:** 3.5.5
-**Java:** 17+
-**Maven:** 3.6+
-
-
+**Version:** 0.0.1-SNAPSHOT  
+**Spring Boot:** 3.5.5  
+**Java:** 17+  
+**Maven:** 3.6+  
+**Live Demo:** https://ms-log-analyzer-8181.onrender.com
+```
